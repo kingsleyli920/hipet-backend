@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机问题测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-btn { 
+            background: #667eea; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            margin: 5px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
+        .result { 
+            background: #f0f0f0; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+    </style>
+</head>
+<body>
+    <h1>🎲 随机问题测试</h1>
+    
+    <button class="test-btn" onclick="testRandom('faq')">测试 FAQ 随机问题</button>
+    <button class="test-btn" onclick="testRandom('health')">测试 健康 随机问题</button>
+    <button class="test-btn" onclick="clearResults()">清空结果</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const demoCases = {
+            health: {
+                questions: [
+                    "我的狗狗最近总是呕吐，没有精神，已经2天了，还拉稀，我很担心",
+                    "我的狗狗今天突然不吃东西，还一直流口水，看起来很痛苦",
+                    "我的狗狗走路一瘸一拐的，右后腿好像不敢着地，是不是骨折了？",
+                    "我的狗狗呼吸很急促，舌头有点发紫，是不是心脏有问题？",
+                    "我的狗狗眼睛红肿，一直流眼泪，还经常用爪子挠眼睛"
+                ],
+                name: "健康紧急情况"
+            },
+            faq: {
+                questions: [
+                    "项圈怎么清洗？用普通肥皂可以吗？",
+                    "我的狗狗项圈没电了，怎么充电？充电需要多长时间？",
+                    "项圈的数据怎么看？心率多少算正常？",
+                    "我的狗狗项圈丢了，能定位找到吗？",
+                    "项圈防水吗？下雨天能正常使用吗？"
+                ],
+                name: "FAQ咨询"
+            }
+        };
+
+        function testRandom(caseType) {
+            const demoCase = demoCases[caseType];
+            if (!demoCase) return;
+
+            // 使用更好的随机数生成，包含时间戳
+            const randomIndex = Math.floor((Math.random() * 1000 + Date.now()) % demoCase.questions.length);
+            const randomQuestion = demoCase.questions[randomIndex];
+            
+            const resultDiv = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            resultDiv.innerHTML += `
+                <div class="result">
+                    <strong>[${timestamp}] ${demoCase.name} - 问题 ${randomIndex + 1}/${demoCase.questions.length}</strong><br>
+                    ${randomQuestion}
+                </div>
+            `;
+            
+            console.log(`[${timestamp}] 选择问题 ${randomIndex + 1}/${demoCase.questions.length}: ${randomQuestion}`);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

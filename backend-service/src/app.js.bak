@@ -1,0 +1,104 @@
+const Fastify = require('fastify');
+const cors = require('@fastify/cors');
+const swagger = require('@fastify/swagger');
+const swaggerUI = require('@fastify/swagger-ui');
+const fastifyStatic = require('@fastify/static');
+const path = require('path');
+
+const healthRoutes = require('./routes/health');
+const chatRoutes = require('./routes/chat');
+const hardwareRoutes = require('./routes/hardware');
+const authRoutes = require('./routes/auth');
+const oauthRoutes = require('./routes/oauth');
+const usersRoutes = require('./routes/users');
+const petsRoutes = require('./routes/pets');
+const healthDataRoutes = require('./routes/healthdata');
+const sessionsRoutes = require('./routes/sessions');
+const uploadRoutes = require('./routes/upload');
+const devicesRoutes = require('./routes/devices');
+const { authenticate } = require('./middleware/auth');
+const registerErrorHandler = require('./middleware/errorHandler');
+
+function buildApp() {
+  const app = Fastify({
+    logger: {
+      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+    },
+    ajv: { customOptions: { allowUnionTypes: true } }
+  });
+
+  app.register(cors, { origin: true });
+
+  // error handler
+  registerErrorHandler(app);
+
+  // Register authentication middleware
+  app.decorate('authenticate', authenticate);
+
+  app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'HiPet Backend Service',
+        version: '1.0.0',
+        description: 'Backend service for HiPet - AI-powered pet health monitoring'
+      },
+      servers: [
+        {
+          url: process.env.API_BASE_URL || 'http://localhost:8000',
+          description: 'Development server'
+        }
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT'
+          }
+        }
+      }
+    }
+  });
+  app.register(swaggerUI, { routePrefix: '/docs' });
+
+  app.register(fastifyStatic, {
+    root: path.join(__dirname, '..', 'public'),
+    prefix: '/',
+    index: false
+  });
+  app.get('/demo', async (req, reply) => reply.sendFile('demo.html'));
+
+  // Register routes
+  app.register(healthRoutes, { prefix: '/health' });
+  app.register(authRoutes, { prefix: '/auth' });
+  app.register(oauthRoutes, { prefix: '/auth' });
+  app.register(chatRoutes, { prefix: '/chat' });
+  app.register(hardwareRoutes, { prefix: '/hardware' });
+  app.register(usersRoutes, { prefix: '/users' });
+  app.register(petsRoutes, { prefix: '/pets' });
+  app.register(healthDataRoutes, { prefix: '/healthdata' });
+  app.register(sessionsRoutes, { prefix: '/sessions' });
+  app.register(uploadRoutes, { prefix: '/upload' });
+  app.register(devicesRoutes, { prefix: '/devices' });
+
+  app.get('/', async () => ({ 
+    service: 'HiPet Backend Service', 
+    status: 'ok',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/auth',
+      users: '/users',
+      pets: '/pets',
+      devices: '/devices',
+      chat: '/chat',
+      sessions: '/sessions',
+      upload: '/upload',
+      health: '/health',
+      docs: '/docs'
+    }
+  }));
+
+  return app;
+}
+
+module.exports = { buildApp };

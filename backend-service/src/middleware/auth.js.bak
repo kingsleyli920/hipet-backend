@@ -1,0 +1,178 @@
+const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
+
+// JWT Authentication middleware
+const authenticate = async (request, reply) => {
+  try {
+    const authHeader = request.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Missing or invalid authorization header'
+      });
+    }
+    
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.type !== 'access') {
+      return reply.status(401).send({
+        error: 'Invalid token type',
+        message: 'Token is not an access token'
+      });
+    }
+    
+    // Check if user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { 
+        id: decoded.userId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        emailVerified: true,
+        isActive: true
+      }
+    });
+    
+    if (!user) {
+      return reply.status(401).send({
+        error: 'User not found',
+        message: 'User account not found or inactive'
+      });
+    }
+    
+    // Attach user to request
+    request.user = {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      emailVerified: user.emailVerified
+    };
+    
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return reply.status(401).send({
+        error: 'Invalid token',
+        message: 'JWT token is invalid'
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return reply.status(401).send({
+        error: 'Token expired',
+        message: 'JWT token has expired'
+      });
+    }
+    
+    console.error('Authentication error:', error);
+    return reply.status(500).send({
+      error: 'Internal server error',
+      message: 'Authentication failed'
+    });
+  }
+};
+
+// Optional authentication middleware (doesn't fail if no token)
+const optionalAuth = async (request, reply) => {
+  try {
+    const authHeader = request.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // No token provided, continue without authentication
+      request.user = null;
+      return;
+    }
+    
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.type !== 'access') {
+      request.user = null;
+      return;
+    }
+    
+    // Check if user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { 
+        id: decoded.userId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        emailVerified: true,
+        isActive: true
+      }
+    });
+    
+    if (user) {
+      request.user = {
+        userId: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        emailVerified: user.emailVerified
+      };
+    } else {
+      request.user = null;
+    }
+    
+  } catch (error) {
+    // If any error occurs, continue without authentication
+    request.user = null;
+  }
+};
+
+// Role-based authorization middleware
+const authorize = (roles = []) => {
+  return async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      });
+    }
+    
+    // For now, we don't have roles implemented
+    // This is a placeholder for future role-based access control
+    // You can extend this based on your requirements
+    
+    return;
+  };
+};
+
+// Email verification required middleware
+const requireEmailVerification = async (request, reply) => {
+  if (!request.user) {
+    return reply.status(401).send({
+      error: 'Unauthorized',
+      message: 'Authentication required'
+    });
+  }
+  
+  if (!request.user.emailVerified) {
+    return reply.status(403).send({
+      error: 'Email verification required',
+      message: 'Please verify your email address to access this resource'
+    });
+  }
+};
+
+module.exports = {
+  authenticate,
+  optionalAuth,
+  authorize,
+  requireEmailVerification
+};

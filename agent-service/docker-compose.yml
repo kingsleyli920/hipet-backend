@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  agent-service:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - AGENT_SERVICE_HOST=0.0.0.0
+      - AGENT_SERVICE_PORT=8001
+      - GOOGLE_PROJECT_ID=${GOOGLE_PROJECT_ID}
+      - GOOGLE_LOCATION=${GOOGLE_LOCATION:-us-central1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_MODEL=${LLM_MODEL:-gemini-1.5-pro}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./logs:/app/logs
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/credentials.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

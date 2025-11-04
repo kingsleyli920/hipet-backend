@@ -1,0 +1,22 @@
+/Users/kingsley/miniconda3/lib/python3.11/site-packages/google/cloud/aiplatform/initializer.py:22: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources  # noqa: F401 # Note this is used after copybara replacement
+2025-10-11 19:41:27.046 | INFO     | app.core.language_detector:__init__:37 - LanguageDetector initialized
+2025-10-11 19:41:27.047 | INFO     | app.core.llm_client:__init__:29 - Vertex AI Gemini initialized successfully with model: gemini-2.5-pro
+2025-10-11 19:41:27.062 | INFO     | app.config.prompt_loader:_load_config:27 - Loaded prompt configuration from /Users/kingsley/Desktop/workspace/HiPet/agent-service/app/config/prompts.yaml
+2025-10-11 19:41:27.072 | INFO     | app.core.language_detector:__init__:37 - LanguageDetector initialized
+/Users/kingsley/Desktop/workspace/HiPet/agent-service/main.py:46: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/Users/kingsley/Desktop/workspace/HiPet/agent-service/main.py:53: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+INFO:     Will watch for changes in these directories: ['/Users/kingsley/Desktop/workspace/HiPet/agent-service']
+ERROR:    [Errno 48] Address already in use

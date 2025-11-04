@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiPet Agent Service - 流式聊天演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .demo-section {
+            padding: 30px;
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .demo-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .demo-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .chat-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 2px solid #e9ecef;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            text-align: right;
+        }
+
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 20px 20px 5px 20px;
+            display: inline-block;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .agent-message {
+            text-align: left;
+        }
+
+        .agent-message .message-content {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 20px 20px 20px 5px;
+            display: inline-block;
+            max-width: 80%;
+            word-wrap: break-word;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .agent-label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .agent-label .emoji {
+            font-size: 1.2em;
+        }
+
+        .butler { color: #4facfe; }
+        .doctor { color: #ff6b6b; }
+        .nutritionist { color: #4ecdc4; }
+        .trainer { color: #45b7d1; }
+        .faq { color: #96ceb4; }
+        .avatar { color: #feca57; }
+        .system { color: #a55eea; }
+
+        .transfer-message {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .transfer-message .message-content {
+            background: linear-gradient(135deg, #a55eea 0%, #8e44ad 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            display: inline-block;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .typing-indicator {
+            display: none;
+            text-align: left;
+            margin-bottom: 20px;
+        }
+
+        .typing-indicator .message-content {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 20px 20px 20px 5px;
+            display: inline-block;
+            border: 1px solid #e9ecef;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .custom-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .custom-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .custom-input input:focus {
+            border-color: #667eea;
+        }
+
+        .custom-input button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .custom-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .custom-input button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e9ecef;
+        }
+
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .feature-card p {
+            color: #6c757d;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐾 HiPet Agent Service</h1>
+            <p>Intelligent Pet Health Management Platform - LangGraph Workflow Demo</p>
+        </div>
+
+        <div class="demo-section">
+            <div id="status" class="status info">
+                🚀 准备就绪，点击下方按钮开始演示
+            </div>
+
+            <div class="demo-controls">
+                <button class="demo-btn" onclick="runDemo('health')">🏥 健康紧急情况 (随机)</button>
+                <button class="demo-btn" onclick="runDemo('nutrition')">🍽️ 营养咨询 (随机)</button>
+                <button class="demo-btn" onclick="runDemo('training')">🎾 训练咨询 (随机)</button>
+                <button class="demo-btn" onclick="runDemo('faq')">❓ FAQ咨询 (随机)</button>
+                <button class="demo-btn" onclick="runDemo('avatar')">🎨 头像生成 (随机)</button>
+                <button class="demo-btn" onclick="returnToButler()">🔄 返回管家</button>
+                <button class="demo-btn" onclick="testRandomOnly()">🎲 测试随机</button>
+                <button class="demo-btn" onclick="clearChat()">🗑️ 清空聊天</button>
+            </div>
+            
+            <div style="text-align: center; margin: 10px 0; color: #666; font-size: 14px;">
+                💡 Tip: Based on LangGraph workflow, each click will randomly select different questions. Open browser console (F12) to view random selection details
+            </div>
+
+            <div class="chat-container" id="chatContainer">
+                <div class="message agent-message">
+                    <div class="agent-label butler">
+                        <span class="emoji">🤖</span>
+                        AI管家
+                    </div>
+                    <div class="message-content">
+                        您好！我是HiPet的AI管家，可以为您提供专业的宠物健康管理建议。请选择上方的演示案例，或者直接输入您的问题。
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="agent-label system">
+                    <span class="emoji">⏳</span>
+                    系统
+                </div>
+                <div class="message-content">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="custom-input">
+                <input type="text" id="customInput" placeholder="输入您的问题..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendCustomMessage()" id="sendBtn">发送</button>
+            </div>
+
+            <div class="features">
+                <div class="feature-card">
+                    <h3>🎯 智能分流</h3>
+                    <p>自动识别用户意图，智能转接到合适的专科Agent</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ LangGraph Workflow</h3>
+                    <p>Intelligent workflow based on LangGraph, supporting complex multi-agent collaboration</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🏥 专业建议</h3>
+                    <p>每个Agent都提供专业级的宠物健康建议</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔄 无缝转接</h3>
+                    <p>用户无需重复输入，AI直接基于上下文回复</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "";
+        const chatContainer = document.getElementById('chatContainer');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const status = document.getElementById('status');
+        const customInput = document.getElementById('customInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        const demoCases = {
+            health: {
+                questions: [
+                    "我的狗狗最近总是呕吐，没有精神，已经2天了，还拉稀，我很担心",
+                    "我的狗狗今天突然不吃东西，还一直流口水，看起来很痛苦",
+                    "我的狗狗走路一瘸一拐的，右后腿好像不敢着地，是不是骨折了？",
+                    "我的狗狗呼吸很急促，舌头有点发紫，是不是心脏有问题？",
+                    "我的狗狗眼睛红肿，一直流眼泪，还经常用爪子挠眼睛",
+                    "My dog has been vomiting and has diarrhea for 2 days, very worried",
+                    "My dog suddenly stopped eating and keeps drooling, looks in pain",
+                    "My dog is limping and won't put weight on his right hind leg, is it broken?",
+                    "My dog is breathing rapidly with a purple tongue, heart problem?",
+                    "My dog's eyes are red and swollen, keeps tearing and scratching"
+                ],
+                name: "健康紧急情况 / Health Emergency"
+            },
+            nutrition: {
+                questions: [
+                    "我的狗狗体重有点超标，现在30公斤，应该吃什么狗粮？需要减肥吗？",
+                    "我的狗狗最近掉毛很严重，是不是营养不够？需要补充什么？",
+                    "我的狗狗是幼犬，3个月大，应该怎么喂养？一天喂几次？",
+                    "我的狗狗对某些食物过敏，怎么知道哪些食物不能吃？",
+                    "我的狗狗是老年犬，10岁了，饮食上需要注意什么？",
+                    "My dog is overweight at 30kg, what food should I feed? Need to diet?",
+                    "My dog is shedding heavily, is it nutritional deficiency? What supplements?",
+                    "My dog is a puppy, 3 months old, how should I feed? How many times a day?",
+                    "My dog has food allergies, how to know which foods to avoid?",
+                    "My dog is 10 years old, what should I pay attention to in diet?"
+                ],
+                name: "营养咨询 / Nutrition Consultation"
+            },
+            training: {
+                questions: [
+                    "我的狗狗不会坐下，怎么训练？它很调皮，注意力不集中",
+                    "我的狗狗总是乱叫，特别是有人经过的时候，怎么纠正？",
+                    "我的狗狗喜欢咬东西，把我的鞋子都咬坏了，怎么办？",
+                    "我的狗狗出门就乱跑，不听话，怎么训练它随行？",
+                    "我的狗狗很胆小，见到陌生人就躲，怎么让它更自信？",
+                    "My dog doesn't know how to sit, how to train? He's very naughty and distracted",
+                    "My dog barks constantly, especially when people pass by, how to stop?",
+                    "My dog likes to chew things, ruined my shoes, what to do?",
+                    "My dog runs around when outside, doesn't listen, how to train loose leash?",
+                    "My dog is very timid, hides from strangers, how to make him confident?"
+                ],
+                name: "训练咨询 / Training Consultation"
+            },
+            faq: {
+                questions: [
+                    "项圈怎么清洗？用普通肥皂可以吗？",
+                    "我的狗狗项圈没电了，怎么充电？充电需要多长时间？",
+                    "项圈的数据怎么看？心率多少算正常？",
+                    "我的狗狗项圈丢了，能定位找到吗？",
+                    "项圈防水吗？下雨天能正常使用吗？",
+                    "How to clean the collar? Can I use regular soap?",
+                    "My dog's collar is out of battery, how to charge? How long to charge?",
+                    "How to read collar data? What's normal heart rate?",
+                    "My dog's collar is lost, can I track and find it?",
+                    "Is the collar waterproof? Can it work normally in rain?"
+                ],
+                name: "FAQ咨询 / FAQ Consultation"
+            },
+            avatar: {
+                questions: [
+                    "想要可爱的赛博卡通风格头像，要突出狗狗的耳朵",
+                    "帮我生成一个专业的宠物头像，要看起来很帅气",
+                    "我想要一个Q版风格的狗狗头像，要萌萌的",
+                    "生成一个写实风格的宠物头像，要很逼真",
+                    "我想要一个动漫风格的狗狗头像，要很可爱",
+                    "Want a cute cyber cartoon style avatar, highlight the dog's ears",
+                    "Generate a professional pet avatar, make it look handsome",
+                    "I want a chibi style dog avatar, make it super cute",
+                    "Generate a realistic style pet avatar, make it very lifelike",
+                    "I want an anime style dog avatar, make it adorable"
+                ],
+                name: "头像生成 / Avatar Generation"
+            }
+        };
+
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function addMessage(content, type, agent = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            let labelHtml = '';
+            if (agent) {
+                const emoji = getAgentEmoji(agent);
+                const className = agent.toLowerCase();
+                labelHtml = `<div class="agent-label ${className}">
+                    <span class="emoji">${emoji}</span>
+                    ${getAgentName(agent)}
+                </div>`;
+            }
+            
+            messageDiv.innerHTML = `
+                ${labelHtml}
+                <div class="message-content">${content}</div>
+            `;
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function getAgentEmoji(agent) {
+            const emojis = {
+                'butler': '🤖',
+                'doctor': '🏥',
+                'nutritionist': '🍽️',
+                'trainer': '🎾',
+                'faq': '❓',
+                'avatar': '🎨',
+                'system': '⚙️'
+            };
+            return emojis[agent] || '🤖';
+        }
+
+        function getAgentName(agent) {
+            const names = {
+                'butler': 'AI管家',
+                'doctor': 'AI医生',
+                'nutritionist': '营养师',
+                'trainer': '训练师',
+                'faq': 'FAQ助手',
+                'avatar': '头像设计师',
+                'system': '系统'
+            };
+            return names[agent] || 'AI助手';
+        }
+
+        function showTyping() {
+            typingIndicator.style.display = 'block';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+
+        async function runDemo(caseType) {
+            const demoCase = demoCases[caseType];
+            if (!demoCase) return;
+
+            // 使用更简单的随机数生成
+            const randomIndex = Math.floor(Math.random() * demoCase.questions.length);
+            const randomQuestion = demoCase.questions[randomIndex];
+            
+            // 调试信息
+            console.log(`[${new Date().toLocaleTimeString()}] 选择问题 ${randomIndex + 1}/${demoCase.questions.length}: ${randomQuestion}`);
+
+            // 禁用所有按钮
+            document.querySelectorAll('.demo-btn').forEach(btn => btn.disabled = true);
+            sendBtn.disabled = true;
+            
+            updateStatus(`正在演示: ${demoCase.name} - 随机问题 (${randomIndex + 1}/${demoCase.questions.length})`, 'info');
+            
+            // 添加用户消息
+            addMessage(randomQuestion, 'user');
+            
+            // 显示输入指示器
+            showTyping();
+            
+            try {
+                const response = await fetch(`${API_BASE}/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: randomQuestion,
+                        conversation_summary: "",
+                        pet_profile: {
+                            name: "小白",
+                            breed: "金毛",
+                            age: 24,
+                            weight: 25.5,
+                            gender: "male",
+                            neutered: true
+                        },
+                        window_stats: {
+                            timestamp: new Date().toISOString(),
+                            heart_rate: 125.0,
+                            hrv: 40.0,
+                            activity_level: 0.2
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                hideTyping();
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                updateStatus('✅ 演示完成！', 'success');
+                                break;
+                            }
+                            
+                            try {
+                                const responseData = JSON.parse(data);
+                                handleStreamResponse(responseData);
+                            } catch (e) {
+                                console.error('JSON parse error:', e);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                hideTyping();
+                updateStatus(`❌ 演示失败: ${error.message}`, 'error');
+                addMessage(`演示失败: ${error.message}`, 'agent', 'system');
+            } finally {
+                // 重新启用按钮
+                document.querySelectorAll('.demo-btn').forEach(btn => btn.disabled = false);
+                sendBtn.disabled = false;
+            }
+        }
+
+        function handleStreamResponse(responseData) {
+            const { type, agent, content } = responseData;
+            
+            if (type === 'router') {
+                const { next, reason, confidence, response_preview } = content;
+                addMessage(`
+                    <strong>🎯 目标:</strong> ${next}<br>
+                    <strong>💭 原因:</strong> ${reason}<br>
+                    <strong>📊 置信度:</strong> ${confidence}<br>
+                    <strong>💬 预览:</strong> ${response_preview}
+                `, 'agent', 'butler');
+                
+            } else if (type === 'transfer') {
+                addMessage(content.message, 'transfer');
+                
+            } else if (type === 'specialist') {
+                let message = '';
+                
+                if (agent === 'doctor') {
+                    const { assessment, risk_level, watchouts, next_actions, when_to_see_vet } = content;
+                    message = `
+                        <strong>🏥 评估:</strong> ${assessment}<br><br>
+                        <strong>⚠️ 风险等级:</strong> ${risk_level.toUpperCase()}<br><br>
+                        <strong>👀 观察要点:</strong><br>
+                        ${watchouts.slice(0, 3).map((w, i) => `${i + 1}. ${w}`).join('<br>')}<br><br>
+                        <strong>📋 建议行动:</strong><br>
+                        ${next_actions.slice(0, 3).map((a, i) => `${i + 1}. ${a}`).join('<br>')}<br><br>
+                        <strong>🚨 就医时机:</strong> ${when_to_see_vet}
+                    `;
+                } else if (agent === 'nutritionist') {
+                    const { summary, meal_plan, avoid_list, tips } = content;
+                    message = `
+                        <strong>🍽️ 总结:</strong> ${summary}<br><br>
+                        <strong>📝 饮食计划:</strong><br>
+                        ${meal_plan.slice(0, 3).map((p, i) => `${i + 1}. ${p}`).join('<br>')}<br><br>
+                        <strong>🚫 避免食物:</strong><br>
+                        ${avoid_list.slice(0, 3).map((a, i) => `${i + 1}. ${a}`).join('<br>')}<br><br>
+                        <strong>💡 小贴士:</strong><br>
+                        ${tips.slice(0, 3).map((t, i) => `${i + 1}. ${t}`).join('<br>')}
+                    `;
+                } else if (agent === 'faq') {
+                    const { answer, source } = content;
+                    message = `
+                        <strong>❓ 答案:</strong> ${answer}<br><br>
+                        <strong>📚 来源:</strong> ${source === 'builtin' ? '内置知识库' : '通用回答'}
+                    `;
+                } else if (agent === 'trainer') {
+                    const { plan, exercise, env_setup, warnings } = content;
+                    message = `
+                        <strong>🎾 训练计划:</strong><br>
+                        ${plan.slice(0, 3).map((p, i) => `${i + 1}. ${p}`).join('<br>')}<br><br>
+                        <strong>🏃 运动建议:</strong><br>
+                        ${exercise.slice(0, 3).map((e, i) => `${i + 1}. ${e}`).join('<br>')}<br><br>
+                        <strong>⚠️ 注意事项:</strong><br>
+                        ${warnings.slice(0, 3).map((w, i) => `${i + 1}. ${w}`).join('<br>')}
+                    `;
+                } else if (agent === 'avatar') {
+                    const { style, quality, notes, ok_to_generate } = content;
+                    message = `
+                        <strong>🎨 风格:</strong> ${style}<br><br>
+                        <strong>📐 质量:</strong> ${quality}<br><br>
+                        <strong>📝 备注:</strong> ${notes}<br><br>
+                        <strong>✅ 可生成:</strong> ${ok_to_generate ? '是' : '否'}
+                    `;
+                } else if (agent === 'butler' && content.status === 'returned_to_butler') {
+                    // 处理返回管家的特殊响应
+                    message = content.message;
+                } else {
+                    message = JSON.stringify(content, null, 2);
+                }
+                
+                addMessage(message, 'agent', agent);
+            }
+        }
+
+        async function sendCustomMessage() {
+            const message = customInput.value.trim();
+            if (!message) return;
+            
+            customInput.value = '';
+            sendBtn.disabled = true;
+            
+            addMessage(message, 'user');
+            showTyping();
+            
+            try {
+                const response = await fetch(`${API_BASE}/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_summary: "",
+                        pet_profile: {
+                            name: "小白",
+                            breed: "金毛",
+                            age: 24,
+                            weight: 25.5,
+                            gender: "male",
+                            neutered: true
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                hideTyping();
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                updateStatus('✅ 回复完成！', 'success');
+                                break;
+                            }
+                            
+                            try {
+                                const responseData = JSON.parse(data);
+                                handleStreamResponse(responseData);
+                            } catch (e) {
+                                console.error('JSON parse error:', e);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                hideTyping();
+                updateStatus(`❌ 发送失败: ${error.message}`, 'error');
+                addMessage(`发送失败: ${error.message}`, 'agent', 'system');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendCustomMessage();
+            }
+        }
+
+        function clearChat() {
+            chatContainer.innerHTML = `
+                <div class="message agent-message">
+                    <div class="agent-label butler">
+                        <span class="emoji">🤖</span>
+                        AI管家
+                    </div>
+                    <div class="message-content">
+                        聊天记录已清空，请选择演示案例或输入新问题。
+                    </div>
+                </div>
+            `;
+            updateStatus('🗑️ 聊天记录已清空', 'info');
+        }
+
+        function testRandomOnly() {
+            // 测试FAQ的随机选择
+            const faqCase = demoCases.faq;
+            const results = [];
+            
+            for (let i = 0; i < 10; i++) {
+                const randomIndex = Math.floor(Math.random() * faqCase.questions.length);
+                results.push(randomIndex + 1);
+            }
+            
+            console.log('FAQ随机测试结果:', results);
+            addMessage(`🎲 随机测试结果: ${results.join(', ')} (应该看到不同的数字)`, 'agent', 'system');
+            updateStatus('🎲 随机测试完成，查看控制台了解详情', 'info');
+        }
+
+        async function returnToButler() {
+            const message = "我想回到管家，或者换个专科咨询";
+            addMessage(message, 'user');
+            showTyping();
+            
+            try {
+                const response = await fetch(`${API_BASE}/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_summary: "用户想要返回管家或换专科咨询",
+                        pet_profile: {
+                            name: "小白",
+                            breed: "金毛",
+                            age: 24,
+                            weight: 25.5,
+                            gender: "male",
+                            neutered: true
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                hideTyping();
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                updateStatus('🔄 已返回管家，可以继续咨询', 'success');
+                                break;
+                            }
+                            
+                            try {
+                                const responseData = JSON.parse(data);
+                                handleStreamResponse(responseData);
+                            } catch (e) {
+                                console.error('JSON parse error:', e);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                hideTyping();
+                updateStatus(`❌ 返回管家失败: ${error.message}`, 'error');
+                addMessage(`返回管家失败: ${error.message}`, 'agent', 'system');
+            }
+        }
+
+        // 检查服务状态
+        async function checkServiceStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health/`);
+                if (response.ok) {
+                    updateStatus('✅ 服务运行正常，可以开始演示', 'success');
+                } else {
+                    updateStatus('❌ 服务状态异常', 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ 无法连接到服务，请确保 agent-service 正在运行', 'error');
+            }
+        }
+
+        // 页面加载时检查服务状态
+        window.addEventListener('load', checkServiceStatus);
+    </script>
+</body>
+</html>
