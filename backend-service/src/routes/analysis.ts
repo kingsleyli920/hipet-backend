@@ -20,8 +20,9 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
   const startWorker = () => {
     app.log.info('Starting analysis worker...');
     const tick = async () => {
+      let job: any | null = null;
       try {
-        const job = await prisma.analysisJob.findFirst({
+        job = await prisma.analysisJob.findFirst({
           where: { status: { in: ['enqueued', 'failed'] }, attempts: { lt: ANALYSIS_MAX_ATTEMPTS } },
           orderBy: { createdAt: 'asc' }
         });
@@ -47,6 +48,11 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
         if (!session) throw new Error('Session not found for analysis');
 
         // Build payload similar to device upload JSON
+        const ha: any = (session as any).healthAssessment;
+        const ba: any = (session as any).behaviorAnalysis;
+        const ma: any = (session as any).mediaAnalysis;
+        const ss: any = (session as any).summaryStatistics;
+        const sys: any = (session as any).systemStatus;
         const payload = {
           metadata: {
             device_id: session.device.deviceId,
@@ -69,55 +75,56 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
             }))
           },
           offline_inference: {
-            health_assessment: session.healthAssessment ? {
-              overall_health_score: session.healthAssessment.overallHealthScore ?? undefined,
-              vital_signs_stability: session.healthAssessment.vitalSignsStability ?? undefined,
-              abnormalities_detected: session.healthAssessment.abnormalitiesDetected || [],
-              trend_analysis: session.healthAssessment.trendAnalysis || 'stable'
+            health_assessment: ha ? {
+              overall_health_score: ha.overallHealthScore ?? undefined,
+              vital_signs_stability: ha.vitalSignsStability ?? undefined,
+              abnormalities_detected: ha.abnormalitiesDetected || [],
+              trend_analysis: ha.trendAnalysis || 'stable'
             } : { overall_health_score: 7, vital_signs_stability: 7, abnormalities_detected: [], trend_analysis: 'stable' },
-            behavior_analysis: session.behaviorAnalysis ? {
-              activity_level: session.behaviorAnalysis.activityLevel ?? 5,
-              mood_state: session.behaviorAnalysis.moodState ?? 5,
-              behavior_pattern: session.behaviorAnalysis.behaviorPattern || 'normal_activity',
-              unusual_behavior_detected: session.behaviorAnalysis.unusualBehaviorDetected || false
+            behavior_analysis: ba ? {
+              activity_level: ba.activityLevel ?? 5,
+              mood_state: ba.moodState ?? 5,
+              behavior_pattern: ba.behaviorPattern || 'normal_activity',
+              unusual_behavior_detected: ba.unusualBehaviorDetected || false
             } : { activity_level: 5, mood_state: 5, behavior_pattern: 'normal_activity', unusual_behavior_detected: false },
             media_analysis: {
-              audio_events: (session.mediaAnalysis?.audioEvents || []).map(e => ({
+              audio_events: ((ma?.audioEvents) || []).map((e: any) => ({
                 timestamp_offset: e.timestampOffset,
                 event_type: e.eventType || 'unknown',
                 duration_ms: e.durationMs || 0,
                 emotional_tone: e.emotionalTone || 'neutral'
               })),
-              video_analysis: (session.mediaAnalysis?.videoEvents || []).map(e => ({
+              video_analysis: ((ma?.videoEvents) || []).map((e: any) => ({
                 timestamp_offset: e.timestampOffset,
                 movement_type: e.movementType || 'unknown',
                 environment_changes: e.environmentChanges || 'unknown'
               }))
             }
           },
-          summary_statistics: session.summaryStatistics ? {
+          summary_statistics: ss ? {
             temperature_stats: {
-              mean: session.summaryStatistics.temperatureMean ?? 0,
-              min: session.summaryStatistics.temperatureMin ?? 0,
-              max: session.summaryStatistics.temperatureMax ?? 0
+              mean: ss.temperatureMean ?? 0,
+              min: ss.temperatureMin ?? 0,
+              max: ss.temperatureMax ?? 0
             },
             heart_rate_stats: {
-              mean: session.summaryStatistics.heartRateMean ?? 0,
-              min: session.summaryStatistics.heartRateMin ?? 0,
-              max: session.summaryStatistics.heartRateMax ?? 0
+              mean: ss.heartRateMean ?? 0,
+              min: ss.heartRateMin ?? 0,
+              max: ss.heartRateMax ?? 0
             }
           } : undefined,
-          system_status: session.systemStatus ? {
-            battery_level: session.systemStatus.batteryLevel ?? 0,
-            memory_usage_percent: session.systemStatus.memoryUsagePercent ?? 0,
-            storage_available_mb: session.systemStatus.storageAvailableMb ?? 0
+          system_status: sys ? {
+            battery_level: sys.batteryLevel ?? 0,
+            memory_usage_percent: sys.memoryUsagePercent ?? 0,
+            storage_available_mb: sys.storageAvailableMb ?? 0
           } : undefined
         };
 
         const result = await callAgentAnalyze(payload, 'en', { conservative_fill: true, max_penalty: 0.25 });
         app.log.info({ resultKeys: Object.keys(result) }, 'Agent analysis result received');
 
-        const petId = session.device.bindings[0]?.petId || null;
+        const deviceObj: any = (session as any).device;
+        const petId = deviceObj?.bindings?.[0]?.petId || null;
         app.log.info({ petId, sessionId: session.id, deviceId: session.deviceId }, 'Creating sensor analysis record');
 
         await (prisma as any).sensorAnalysis.create({
@@ -138,8 +145,8 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
         await prisma.analysisJob.update({ where: { id: job.id }, data: { status: 'succeeded', lastError: null } });
         app.log.info({ jobId: job.id }, 'Analysis job completed successfully');
       } catch (err: any) {
-        app.log.error({ err: err?.message, jobId: job?.id }, 'analysis worker tick failed');
-        if (job) {
+        app.log.error({ err: err?.message, jobId: job?.id || null }, 'analysis worker tick failed');
+        if (job?.id) {
           await prisma.analysisJob.update({ 
             where: { id: job.id }, 
             data: { status: 'failed', lastError: err?.message } 
