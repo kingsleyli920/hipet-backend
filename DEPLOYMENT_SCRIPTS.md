@@ -7,6 +7,40 @@
 - `deploy_backend.sh` - Backend Service 部署脚本
 - `deploy_agent.sh` - Agent Service 部署脚本
 
+## 🎭 Tmux 组织结构说明
+
+**当前设计**：两个服务使用**同一个 tmux session (`hipet`)**，但使用**不同的 window** 区分：
+- `hipet:backend` - Backend Service (端口 8000)
+- `hipet:agent` - Agent Service (端口 8001)
+
+**优点**：
+- ✅ 两个服务在一个 session 中，方便统一管理
+- ✅ 可以用 `tmux attach -t hipet` 一次性查看所有服务
+- ✅ 切换窗口快速（Ctrl+B, n/p 或数字键）
+- ✅ 便于同时监控两个服务的日志
+
+**查看和切换**：
+```bash
+# 连接到 session（可以看到所有服务）
+tmux attach -t hipet
+
+# 查看所有 window
+tmux list-windows -t hipet
+# 输出示例：
+# 0: backend*   (1 panes) [80x23]
+# 1: agent      (1 panes) [80x23]
+
+# 快速切换
+# Ctrl+B, 0 - backend
+# Ctrl+B, 1 - agent
+# Ctrl+B, w - 选择窗口列表
+```
+
+**如果需要独立的 session**（修改脚本中的 `TMUX_SESSION` 变量）：
+- Backend: `TMUX_SESSION="hipet-backend"`
+- Agent: `TMUX_SESSION="hipet-agent"`
+- 分别连接：`tmux attach -t hipet-backend` 和 `tmux attach -t hipet-agent`
+
 ## 🚀 功能特性
 
 每个脚本都会自动执行以下步骤：
@@ -83,18 +117,30 @@ cd ~/hipet-backend
 ## 👀 查看服务日志
 
 ```bash
-# 连接到 tmux session
+# 连接到 tmux session（包含 backend 和 agent 两个窗口）
 tmux attach -t hipet
 
+# 查看所有 window 列表（按 Ctrl+B, w）:
+# 会显示：
+# 0: backend*   - Backend Service (当前激活)
+# 1: agent      - Agent Service
+
 # 在 tmux 中切换 window:
-# Ctrl+B 然后按数字键切换 window
-# 或 Ctrl+B, n (下一个) / Ctrl+B, p (上一个)
+# Ctrl+B, 0 - 切换到 window 0 (backend)
+# Ctrl+B, 1 - 切换到 window 1 (agent)
+# Ctrl+B, n - 切换到下一个 window
+# Ctrl+B, p - 切换到上一个 window
+# Ctrl+B, w - 显示窗口列表，用方向键选择
+
+# 或者直接切换到指定 window（不进入 tmux）:
+tmux select-window -t hipet:backend  # 切换到 backend
+tmux select-window -t hipet:agent    # 切换到 agent
+
+# 查看当前 session 的所有 window（不进入 tmux）:
+tmux list-windows -t hipet
 
 # 分离 session（服务继续运行）:
 # Ctrl+B, d
-
-# 查看所有 window:
-# Ctrl+B, w
 ```
 
 ## 🔍 验证服务运行
