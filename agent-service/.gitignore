@@ -47,3 +47,7 @@ build/
 *.sqlite
 *.sqlite3
 hipet-473407-c7d755e7f843.json
+
+__pycache__/
+*.py[cod]
+*$py.class
