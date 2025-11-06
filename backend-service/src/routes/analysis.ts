@@ -2,7 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 
 const AGENT_BASE_URL = process.env.AGENT_BASE_URL || 'http://localhost:8001';
-const ANALYSIS_INTERVAL_MS = Number(process.env.ANALYSIS_WORKER_INTERVAL_MS || 3000);
+const BASE_INTERVAL_MS = Number(process.env.ANALYSIS_WORKER_INTERVAL_MS || 5000);
+const MAX_BACKOFF_MS = Number(process.env.ANALYSIS_WORKER_MAX_MS || 30000);
 const ANALYSIS_MAX_ATTEMPTS = Number(process.env.ANALYSIS_MAX_ATTEMPTS || 3);
 
 async function callAgentAnalyze(payload: any, language = 'en', options: any = { conservative_fill: true, max_penalty: 0.25 }) {
@@ -19,6 +20,8 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
   // Background worker (lightweight DB polling)
   const startWorker = () => {
     app.log.info('Starting analysis worker...');
+    let currentInterval = BASE_INTERVAL_MS;
+    const scheduleNext = () => setTimeout(tick, currentInterval);
     const tick = async () => {
       let job: any | null = null;
       try {
@@ -26,9 +29,15 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
           where: { status: { in: ['enqueued', 'failed'] }, attempts: { lt: ANALYSIS_MAX_ATTEMPTS } },
           orderBy: { createdAt: 'asc' }
         });
-        if (!job) return;
-        
-        app.log.info({ jobId: job.id, sessionId: job.sessionId }, 'Processing analysis job');
+        if (!job) {
+          // idle backoff: 放大间隔，直到上限
+          currentInterval = Math.min(currentInterval * 2, MAX_BACKOFF_MS);
+          return scheduleNext();
+        }
+
+        // 有任务：恢复基础间隔，并输出简洁日志
+        currentInterval = BASE_INTERVAL_MS;
+        app.log.info({ jobId: job.id }, 'Processing analysis job');
 
         await prisma.analysisJob.update({ where: { id: job.id }, data: { status: 'processing', attempts: { increment: 1 } } });
 
@@ -48,6 +57,7 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
         if (!session) throw new Error('Session not found for analysis');
 
         // Build payload similar to device upload JSON
+        const deviceObj: any = (session as any).device;
         const ha: any = (session as any).healthAssessment;
         const ba: any = (session as any).behaviorAnalysis;
         const ma: any = (session as any).mediaAnalysis;
@@ -55,7 +65,7 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
         const sys: any = (session as any).systemStatus;
         const payload = {
           metadata: {
-            device_id: session.device.deviceId,
+            device_id: deviceObj?.deviceId,
             session_id: session.sessionId,
             timestamp: new Date(session.timestamp).getTime(),
             firmware_version: session.firmwareVersion || undefined,
@@ -123,7 +133,6 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
         const result = await callAgentAnalyze(payload, 'en', { conservative_fill: true, max_penalty: 0.25 });
         app.log.info({ resultKeys: Object.keys(result) }, 'Agent analysis result received');
 
-        const deviceObj: any = (session as any).device;
         const petId = deviceObj?.bindings?.[0]?.petId || null;
         app.log.info({ petId, sessionId: session.id, deviceId: session.deviceId }, 'Creating sensor analysis record');
 
@@ -152,9 +161,11 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
             data: { status: 'failed', lastError: err?.message } 
           });
         }
+      } finally {
+        scheduleNext();
       }
     };
-    setInterval(tick, ANALYSIS_INTERVAL_MS);
+    scheduleNext();
   };
   startWorker();
 
