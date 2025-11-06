@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import oauthService from '../services/oauthService';
 
 const prisma = new PrismaClient();
