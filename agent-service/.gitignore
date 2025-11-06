@@ -9,6 +9,25 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Type checkers / linters / caches
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Python packaging caches
+__pypackages__/
+pip-wheel-metadata/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage artifacts
+.coverage.*
+coverage.xml
+
+# Misc
+.python-version
 *.so
 .Python
 venv/
