@@ -5,10 +5,14 @@
 *.env
 .env.backup
 
-# Python
+# Python bytecode and cache
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
 
 # Type checkers / linters / caches
 .mypy_cache/
@@ -29,7 +33,6 @@ coverage.xml
 # Misc
 .python-version
 *.so
-.Python
 venv/
 env/
 ENV/
@@ -66,7 +69,3 @@ build/
 *.sqlite
 *.sqlite3
 hipet-473407-c7d755e7f843.json
-
-__pycache__/
-*.py[cod]
-*$py.class
