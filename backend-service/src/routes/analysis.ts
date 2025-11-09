@@ -2,8 +2,11 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 
 const AGENT_BASE_URL = process.env.AGENT_BASE_URL || 'http://localhost:8001';
-const BASE_INTERVAL_MS = Number(process.env.ANALYSIS_WORKER_INTERVAL_MS || 5000);
-const MAX_BACKOFF_MS = Number(process.env.ANALYSIS_WORKER_MAX_MS || 30000);
+// Worker polling configuration
+// Production: 30-60 seconds (reduce database load)
+// Development: 5-10 seconds (faster testing)
+const BASE_INTERVAL_MS = Number(process.env.ANALYSIS_WORKER_INTERVAL_MS || (process.env.NODE_ENV === 'production' ? 30000 : 5000));
+const MAX_BACKOFF_MS = Number(process.env.ANALYSIS_WORKER_MAX_MS || 300000); // 5 minutes max when idle
 const ANALYSIS_MAX_ATTEMPTS = Number(process.env.ANALYSIS_MAX_ATTEMPTS || 3);
 
 async function callAgentAnalyze(payload: any, language = 'en', options: any = { conservative_fill: true, max_penalty: 0.25 }) {
@@ -25,21 +28,36 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
     const tick = async () => {
       let job: any | null = null;
       try {
+        // Lightweight query: find a job without transaction (single worker instance)
+        // For multi-instance, consider using Redis queue or database locks
         job = await prisma.analysisJob.findFirst({
-          where: { status: { in: ['enqueued', 'failed'] }, attempts: { lt: ANALYSIS_MAX_ATTEMPTS } },
-          orderBy: { createdAt: 'asc' }
+          where: { 
+            status: { in: ['enqueued', 'failed'] }, 
+            attempts: { lt: ANALYSIS_MAX_ATTEMPTS } 
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, sessionId: true }
         });
+
         if (!job) {
-          // idle backoff: 放大间隔，直到上限
-          currentInterval = Math.min(currentInterval * 2, MAX_BACKOFF_MS);
+          // No jobs available: exponential backoff to reduce database load
+          const nextInterval = Math.min(currentInterval * 1.5, MAX_BACKOFF_MS);
+          currentInterval = nextInterval;
+          // Only log when interval changes significantly
+          if (nextInterval >= BASE_INTERVAL_MS * 4) {
+            app.log.debug({ interval: nextInterval }, 'Worker idle, increasing poll interval');
+          }
           return scheduleNext();
         }
 
-        // 有任务：恢复基础间隔，并输出简洁日志
+        // Job found: claim it and reset to base interval
+        await prisma.analysisJob.update({
+          where: { id: job.id },
+          data: { status: 'processing', attempts: { increment: 1 } }
+        });
+
         currentInterval = BASE_INTERVAL_MS;
         app.log.info({ jobId: job.id }, 'Processing analysis job');
-
-        await prisma.analysisJob.update({ where: { id: job.id }, data: { status: 'processing', attempts: { increment: 1 } } });
 
         const session = await prisma.sensorDataSession.findUnique({
           where: { id: job.sessionId },
