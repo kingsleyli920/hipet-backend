@@ -35,7 +35,94 @@ const updateDeviceStatusSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional()
 });
 
+const createDeviceSchema = z.object({
+  deviceId: z.string().min(1),
+  deviceType: z.string().default('collar'),
+  model: z.string().optional(),
+  firmwareVersion: z.string().optional(),
+  hardwareVersion: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional()
+});
+
 export default async function devicesRoutes(fastify, options) {
+  
+  // Create device (for testing/admin use)
+  fastify.post('/create', {
+    preHandler: [fastify.authenticate],
+    schema: {
+      body: {
+        type: 'object',
+        required: ['deviceId'],
+        properties: {
+          deviceId: { type: 'string' },
+          deviceType: { type: 'string', default: 'collar' },
+          model: { type: 'string' },
+          firmwareVersion: { type: 'string' },
+          hardwareVersion: { type: 'string' },
+          metadata: { type: 'object' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const data = createDeviceSchema.parse(request.body);
+      
+      // Check if device already exists
+      const existingDevice = await prisma.device.findUnique({
+        where: { deviceId: data.deviceId }
+      });
+      
+      if (existingDevice) {
+        return reply.status(400).send({
+          error: 'Device already exists',
+          message: `Device with ID ${data.deviceId} already exists`,
+          device: existingDevice
+        });
+      }
+      
+      // Create device
+      const device = await prisma.device.create({
+        data: {
+          deviceId: data.deviceId,
+          deviceType: data.deviceType || 'collar',
+          model: data.model,
+          firmwareVersion: data.firmwareVersion || '2.1.0',
+          hardwareVersion: data.hardwareVersion,
+          status: 'inactive',
+          metadata: data.metadata || {} as any
+        },
+        select: {
+          id: true,
+          deviceId: true,
+          deviceType: true,
+          model: true,
+          firmwareVersion: true,
+          hardwareVersion: true,
+          status: true,
+          createdAt: true
+        }
+      });
+      
+      return reply.status(201).send({
+        message: 'Device created successfully',
+        device
+      });
+      
+    } catch (error) {
+      if (error.name === 'ZodError') {
+        return reply.status(400).send({
+          error: 'Validation error',
+          details: error.errors
+        });
+      }
+      
+      console.error('Create device error:', error);
+      return reply.status(500).send({
+        error: 'Internal server error',
+        message: 'Failed to create device'
+      });
+    }
+  });
   
   // Get user's all devices (through pets)
   fastify.get('/', {
