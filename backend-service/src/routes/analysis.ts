@@ -213,7 +213,7 @@ export default async function analysisRoutes(app: FastifyInstance): Promise<void
   // Worker polling removed - analysis is now synchronous when sensor data is received
 
   // Manual analysis trigger (for retry or manual analysis)
-  app.post('/analyze/:sessionId', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/analyze/:sessionId', { preHandler: [app.authenticate] }, async (request: any, reply) => {
     try {
       const { sessionId } = request.params as any;
       const userId = request.user.userId;

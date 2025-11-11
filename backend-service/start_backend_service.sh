@@ -40,4 +40,4 @@ echo "✅ Database connection successful"
 
 # Start the service
 echo "🌟 Starting backend service on port ${PORT:-8000}..."
-bun run server.js
+bun run start
