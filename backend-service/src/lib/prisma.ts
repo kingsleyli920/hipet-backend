@@ -45,7 +45,7 @@ export const prisma = globalForPrisma.prisma || new PrismaClient({
 if (process.env.NODE_ENV === 'production') {
   prisma.$connect().catch((err) => {
     console.error('Failed to connect to database on startup:', err);
-  });
+});
 }
 
 if (process.env.NODE_ENV !== 'production') {

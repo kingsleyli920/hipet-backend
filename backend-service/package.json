@@ -15,7 +15,8 @@
     "test:user-system": "node scripts/test_user_system.js",
     "test:avatar": "node scripts/test_avatar_generation.js",
     "test:comprehensive": "node scripts/test_comprehensive.js",
-    "test:oauth": "node scripts/test_oauth.js"
+    "test:oauth": "node scripts/test_oauth.js",
+    "test:e2e": "node scripts/test_e2e_analysis.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

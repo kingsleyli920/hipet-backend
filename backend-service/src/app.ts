@@ -87,7 +87,7 @@ export function buildApp(): FastifyInstance {
   app.register(sessionsRoutes, { prefix: '/sessions' });
   app.register(uploadRoutes, { prefix: '/upload' });
   app.register(devicesRoutes, { prefix: '/devices' });
-  app.register(analysisRoutes, { prefix: '/hardware/analysis' });
+  app.register(analysisRoutes, { prefix: '/analysis' });
 
   app.get('/', async () => ({ 
     service: 'HiPet Backend Service', 
@@ -101,6 +101,8 @@ export function buildApp(): FastifyInstance {
       chat: '/chat',
       sessions: '/sessions',
       upload: '/upload',
+      analysis: '/analysis',
+      hardware: '/hardware',
       health: '/health',
       docs: '/docs'
     }

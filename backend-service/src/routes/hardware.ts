@@ -322,14 +322,6 @@ export default async function hardwareRoutes(app: FastifyInstance): Promise<void
           alerts.push(alert);
         }
 
-        // 11. 创建AI分析任务
-        await (tx as any).analysisJob.create({
-          data: {
-            sessionId: session.id,
-            status: 'enqueued'
-          }
-        });
-
         return { session, alerts };
       });
 
@@ -338,6 +330,18 @@ export default async function hardwareRoutes(app: FastifyInstance): Promise<void
         alertsCount: result.alerts.length,
         deviceId: metadata.device_id 
       }, 'Sensor data processed successfully');
+
+      // Perform AI analysis asynchronously (fire and forget - don't block response)
+      // Analysis errors are logged but don't affect the response
+      const { performAnalysis } = await import('./analysis');
+      performAnalysis(result.session.id, app).catch((err: any) => {
+        app.log.error({ 
+          err: err?.message, 
+          errStack: err?.stack,
+          sessionId: result.session.id,
+          agentUrl: process.env.AGENT_BASE_URL || 'http://localhost:8001'
+        }, 'Background AI analysis failed - check agent service logs');
+      });
 
       const response: SensorDataResponse = {
         success: true,
