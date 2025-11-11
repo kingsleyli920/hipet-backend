@@ -40,6 +40,11 @@ out/
 *.sqlite
 *.sqlite3
 
+# Prisma generated files
+node_modules/.prisma/
+**/.prisma/client/
+prisma/migrations/
+
 # Testing
 coverage/
 .nyc_output/
