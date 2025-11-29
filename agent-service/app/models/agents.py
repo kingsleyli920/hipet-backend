@@ -19,6 +19,7 @@ class RouterResponse(BaseModel):
     confidence: float
     response_preview: str
     transfer_message: Optional[str] = None  # Dynamic transfer message based on user language
+    needs_pet_status: bool = False  # Whether this query needs latest pet status from database
 
 
 # Doctor Agent Models

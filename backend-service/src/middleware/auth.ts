@@ -187,3 +187,208 @@ export async function requireEmailVerification(
   }
 }
 
+// Device authentication middleware
+// Supports both user token and device token authentication
+export async function authenticateDevice(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  try {
+    const authHeader = request.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Missing or invalid authorization header'
+      });
+    }
+    
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    // First, try to verify as user JWT token
+    try {
+      const decoded = jwt.verify(
+        token, 
+        process.env.JWT_SECRET || 'your-secret-key'
+      ) as JWTPayload;
+      
+      if (decoded.type === 'access') {
+        // User token - verify user exists
+        const user = await prisma.user.findFirst({
+          where: { 
+            id: decoded.userId,
+            isActive: true
+          },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            emailVerified: true,
+            isActive: true
+          }
+        });
+        
+        if (user) {
+          (request as AuthenticatedRequest).user = {
+            userId: user.id,
+            type: 'access'
+          };
+          (request as any).device = null;
+          return; // User authentication successful
+        }
+      }
+    } catch (jwtError) {
+      // Not a valid JWT token, continue to check device token
+    }
+    
+    // Try device token authentication
+    const device = await prisma.device.findUnique({
+      where: { deviceToken: token },
+      select: {
+        id: true,
+        deviceId: true,
+        status: true,
+        deviceTokenExpiresAt: true
+      }
+    });
+    
+    if (!device) {
+      return reply.status(401).send({
+        error: 'Invalid token',
+        message: 'Device token is invalid'
+      });
+    }
+    
+    // Check if device token has expired
+    if (device.deviceTokenExpiresAt && device.deviceTokenExpiresAt < new Date()) {
+      return reply.status(401).send({
+        error: 'Token expired',
+        message: 'Device token has expired'
+      });
+    }
+    
+    // Check if device is active
+    if (device.status !== 'active') {
+      return reply.status(403).send({
+        error: 'Device inactive',
+        message: 'Device is not active'
+      });
+    }
+    
+    // Attach device to request
+    (request as any).device = {
+      deviceId: device.id,
+      physicalDeviceId: device.deviceId,
+      type: 'device'
+    };
+    (request as any).user = null;
+    
+  } catch (error: any) {
+    console.error('Device authentication error:', error);
+    return reply.status(500).send({
+      error: 'Internal server error',
+      message: 'Authentication failed'
+    });
+  }
+}
+
+// Flexible authentication: supports both user and device tokens
+// For hardware endpoints that can accept either authentication method
+export async function authenticateUserOrDevice(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  try {
+    const authHeader = request.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Missing or invalid authorization header'
+      });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    // Try user token first
+    try {
+      const decoded = jwt.verify(
+        token, 
+        process.env.JWT_SECRET || 'your-secret-key'
+      ) as JWTPayload;
+      
+      if (decoded.type === 'access') {
+        const user = await prisma.user.findFirst({
+          where: { 
+            id: decoded.userId,
+            isActive: true
+          },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            emailVerified: true,
+            isActive: true
+          }
+        });
+        
+        if (user) {
+          (request as AuthenticatedRequest).user = {
+            userId: user.id,
+            type: 'access'
+          };
+          (request as any).device = null;
+          return;
+        }
+      }
+    } catch (jwtError) {
+      // Not a valid JWT, continue to device token
+    }
+    
+    // Try device token
+    const device = await prisma.device.findUnique({
+      where: { deviceToken: token },
+      select: {
+        id: true,
+        deviceId: true,
+        status: true,
+        deviceTokenExpiresAt: true
+      }
+    });
+    
+    if (device) {
+      if (device.deviceTokenExpiresAt && device.deviceTokenExpiresAt < new Date()) {
+        return reply.status(401).send({
+          error: 'Token expired',
+          message: 'Device token has expired'
+        });
+      }
+      
+      if (device.status === 'active') {
+        (request as any).device = {
+          deviceId: device.id,
+          physicalDeviceId: device.deviceId,
+          type: 'device'
+        };
+        (request as any).user = null;
+        return;
+      }
+    }
+    
+    // Neither authentication method worked
+    return reply.status(401).send({
+      error: 'Invalid token',
+      message: 'Token is invalid or expired'
+    });
+    
+  } catch (error: any) {
+    console.error('Authentication error:', error);
+    return reply.status(500).send({
+      error: 'Internal server error',
+      message: 'Authentication failed'
+    });
+  }
+}
+

@@ -9,7 +9,7 @@ from loguru import logger
 
 from config import settings
 from app.routers import health
-from app.api import hardware, chat, avatar, sensor_analysis
+from app.api import hardware, chat, avatar, sensor_analysis, router_check
 
 
 def create_app() -> FastAPI:
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     # Route registration
     app.include_router(health.router, prefix="/health", tags=["health"])
     app.include_router(chat.router, tags=["chat"])
+    app.include_router(router_check.router, tags=["chat"])
     app.include_router(hardware.router, tags=["hardware"])
     app.include_router(avatar.router, tags=["avatar"])
     app.include_router(sensor_analysis.router, tags=["analyze"])

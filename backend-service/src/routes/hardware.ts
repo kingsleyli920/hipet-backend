@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
+import { authenticateDevice } from '../middleware/auth';
 import type { 
   SensorDataRequest, 
   SensorDataResponse, 
@@ -81,8 +82,14 @@ const sensorDataSchema = z.object({
 });
 
 export default async function hardwareRoutes(app: FastifyInstance): Promise<void> {
-  // 传感器数据接收接口
+  // 传感器数据接收接口 - 支持设备token认证
+  // TODO: 硬件接口集成 - 等待硬件端提供接口实现
+  // 硬件设备需要：
+  // 1. 在绑定后获取 deviceToken (从 /devices/bind 响应中获取)
+  // 2. 使用 deviceToken 作为 Authorization header 上传传感器数据
+  // 3. 请求格式: POST /hardware/sensor-data, Authorization: Bearer <deviceToken>
   app.post('/sensor-data', {
+    preHandler: [authenticateDevice],
     schema: {
       body: {
         type: 'object',
@@ -102,11 +109,31 @@ export default async function hardwareRoutes(app: FastifyInstance): Promise<void
       const data = sensorDataSchema.parse(request.body);
       const { metadata, raw_sensor_data, offline_inference, summary_statistics, system_status } = data;
 
+      // Get device from authentication or verify deviceId matches
+      const authenticatedDevice = (request as any).device;
+      const userId = (request as AuthenticatedRequest).user?.userId;
+
       app.log.info({ 
         deviceId: metadata.device_id, 
         sessionId: metadata.session_id,
-        timestamp: metadata.timestamp 
+        timestamp: metadata.timestamp,
+        authType: authenticatedDevice ? 'device' : userId ? 'user' : 'none'
       }, 'Processing sensor data');
+
+      // If device token was used, verify deviceId matches
+      if (authenticatedDevice) {
+        if (authenticatedDevice.physicalDeviceId !== metadata.device_id) {
+          app.log.warn({ 
+            tokenDeviceId: authenticatedDevice.physicalDeviceId,
+            requestDeviceId: metadata.device_id 
+          }, 'Device ID mismatch');
+          return reply.status(403).send({
+            success: false,
+            error: 'Device ID mismatch',
+            message: 'Device ID in request does not match authenticated device'
+          });
+        }
+      }
 
       // 检查设备是否存在
       const device = await prisma.device.findUnique({

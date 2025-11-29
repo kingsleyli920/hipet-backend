@@ -1,8 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+// Generate a secure device token
+function generateDeviceToken(): string {
+  // Generate a 64-character random token
+  return crypto.randomBytes(32).toString('hex');
+}
 
 // Validation schemas
 const bindDeviceSchema = z.object({
@@ -80,6 +87,9 @@ export default async function devicesRoutes(fastify, options) {
         });
       }
       
+      // Generate device token (long-term, no expiration by default)
+      const deviceToken = generateDeviceToken();
+      
       // Create device
       const device = await prisma.device.create({
         data: {
@@ -89,6 +99,9 @@ export default async function devicesRoutes(fastify, options) {
           firmwareVersion: data.firmwareVersion || '2.1.0',
           hardwareVersion: data.hardwareVersion,
           status: 'inactive',
+          deviceToken,
+          // No expiration by default (null means never expires)
+          deviceTokenExpiresAt: null,
           metadata: data.metadata || {} as any
         },
         select: {
@@ -99,6 +112,7 @@ export default async function devicesRoutes(fastify, options) {
           firmwareVersion: true,
           hardwareVersion: true,
           status: true,
+          deviceToken: true,
           createdAt: true
         }
       });
@@ -256,6 +270,9 @@ export default async function devicesRoutes(fastify, options) {
   });
 
   // Bind device to pet
+  // TODO: 硬件接口集成 - 当硬件设备绑定后，需要将 deviceToken 传递给硬件设备
+  // 硬件设备需要使用此 token 进行后续的数据上传认证
+  // 接口: POST /hardware/sensor-data (需要 Authorization: Bearer <deviceToken>)
   fastify.post('/bind', {
     preHandler: [fastify.authenticate],
     schema: {
@@ -324,6 +341,19 @@ export default async function devicesRoutes(fastify, options) {
       // TODO: Verify bindingCode if provided
       // This would be used for device verification during pairing
 
+      // Generate device token if it doesn't exist
+      let deviceToken = device.deviceToken;
+      if (!deviceToken) {
+        deviceToken = generateDeviceToken();
+        await prisma.device.update({
+          where: { id: device.id },
+          data: {
+            deviceToken,
+            deviceTokenExpiresAt: null // No expiration by default
+          }
+        });
+      }
+
       // Create binding
       const binding = await prisma.deviceBinding.create({
         data: {
@@ -342,7 +372,14 @@ export default async function devicesRoutes(fastify, options) {
           endDate: data.endDate ? new Date(data.endDate) : null
         },
         include: {
-          device: true,
+          device: {
+            select: {
+              id: true,
+              deviceId: true,
+              deviceType: true,
+              deviceToken: true
+            }
+          },
           pet: true
         }
       });
@@ -373,7 +410,9 @@ export default async function devicesRoutes(fastify, options) {
 
       return reply.status(201).send({
         message: 'Device bound successfully',
-        binding
+        binding,
+        // Return device token only once during binding for initial setup
+        deviceToken: binding.device.deviceToken
       });
 
     } catch (error) {
@@ -706,6 +745,150 @@ export default async function devicesRoutes(fastify, options) {
       return reply.status(500).send({
         error: 'Internal server error',
         message: 'Failed to fetch pet devices'
+      });
+    }
+  });
+
+  // Get device token (requires user authentication)
+  fastify.get('/:deviceId/token', {
+    preHandler: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const { deviceId } = request.params;
+      const userId = request.user.userId;
+
+      // Find device and verify user has access through pet binding
+      const device = await prisma.device.findUnique({
+        where: { id: deviceId },
+        include: {
+          bindings: {
+            where: { status: 'active' },
+            include: {
+              pet: true
+            }
+          }
+        }
+      });
+
+      if (!device) {
+        return reply.status(404).send({
+          error: 'Device not found',
+          message: 'Device not found'
+        });
+      }
+
+      // Check if user has access (through pet ownership)
+      const hasAccess = device.bindings.some(b => b.pet.ownerId === userId);
+      if (!hasAccess) {
+        return reply.status(403).send({
+          error: 'Access denied',
+          message: 'You do not have access to this device'
+        });
+      }
+
+      if (!device.deviceToken) {
+        // Generate token if it doesn't exist
+        const newToken = generateDeviceToken();
+        await prisma.device.update({
+          where: { id: device.id },
+          data: {
+            deviceToken: newToken,
+            deviceTokenExpiresAt: null
+          }
+        });
+        return reply.send({
+          deviceId: device.deviceId,
+          deviceToken: newToken,
+          message: 'Device token generated'
+        });
+      }
+
+      return reply.send({
+        deviceId: device.deviceId,
+        deviceToken: device.deviceToken,
+        expiresAt: device.deviceTokenExpiresAt
+      });
+
+    } catch (error) {
+      console.error('Get device token error:', error);
+      return reply.status(500).send({
+        error: 'Internal server error',
+        message: 'Failed to get device token'
+      });
+    }
+  });
+
+  // Reset device token (requires user authentication)
+  fastify.post('/:deviceId/token/reset', {
+    preHandler: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const { deviceId } = request.params;
+      const userId = request.user.userId;
+
+      // Find device and verify user has access
+      const device = await prisma.device.findUnique({
+        where: { id: deviceId },
+        include: {
+          bindings: {
+            where: { status: 'active' },
+            include: {
+              pet: true
+            }
+          }
+        }
+      });
+
+      if (!device) {
+        return reply.status(404).send({
+          error: 'Device not found',
+          message: 'Device not found'
+        });
+      }
+
+      // Check if user has access (through pet ownership)
+      const hasAccess = device.bindings.some(b => b.pet.ownerId === userId);
+      if (!hasAccess) {
+        return reply.status(403).send({
+          error: 'Access denied',
+          message: 'You do not have access to this device'
+        });
+      }
+
+      // Generate new token
+      const newToken = generateDeviceToken();
+      await prisma.device.update({
+        where: { id: device.id },
+        data: {
+          deviceToken: newToken,
+          deviceTokenExpiresAt: null
+        }
+      });
+
+      // Create event
+      await prisma.deviceEvent.create({
+        data: {
+          deviceId: device.id,
+          eventType: 'token_reset',
+          severity: 'info',
+          message: 'Device token reset by user',
+          data: {
+            userId
+          }
+        }
+      });
+
+      return reply.send({
+        message: 'Device token reset successfully',
+        deviceId: device.deviceId,
+        deviceToken: newToken
+      });
+
+    } catch (error) {
+      console.error('Reset device token error:', error);
+      return reply.status(500).send({
+        error: 'Internal server error',
+        message: 'Failed to reset device token'
       });
     }
   });

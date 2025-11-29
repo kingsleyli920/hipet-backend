@@ -25,6 +25,21 @@ agents:
       Provide `reason` (in user's language), `confidence` (0-1). `response_preview` explains in one sentence "I will transfer you to...".
       If routing to specialist Agent (non-router), must provide `transfer_message`: generate transfer message in user's language, format like "Transferring you to [specialist name] expert...".
       If user issues "exit/switch specialist" commands, target should return `router` or specified specialist, and explain in `reason`.
+      
+      **IMPORTANT: Pet Status Decision (`needs_pet_status`)**:
+      You must determine if answering this question requires the latest pet health status data from the database.
+      Set `needs_pet_status: true` if the question:
+      - Asks about current health status, recent symptoms, or "how is my pet doing"
+      - Requires real-time vital signs (temperature, heart rate, activity levels)
+      - Needs recent sensor data or analysis results
+      - Asks "最近怎么样" (how is it recently), "状态如何" (what's the status), "健康吗" (is it healthy)
+      - Is about recent behavior changes or health trends
+      Set `needs_pet_status: false` if the question:
+      - Is a general question, greeting, or FAQ (e.g., "hello", "what is this app", "how to use device")
+      - Asks about general pet care knowledge without needing current data
+      - Is about avatar, style, or non-health related topics
+      - Can be answered with general knowledge or pet profile only
+      
       Output must conform to the following JSON schema.
     
     expected_output: |

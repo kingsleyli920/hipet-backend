@@ -18,7 +18,7 @@ import sessionsRoutes from './routes/sessions.js';
 import uploadRoutes from './routes/upload.js';
 import devicesRoutes from './routes/devices.js';
 import analysisRoutes from './routes/analysis.js';
-import { authenticate } from './middleware/auth.js';
+import { authenticate, authenticateDevice, authenticateUserOrDevice } from './middleware/auth.js';
 import registerErrorHandler from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +39,8 @@ export function buildApp(): FastifyInstance {
 
   // Register authentication middleware
   app.decorate('authenticate', authenticate);
+  app.decorate('authenticateDevice', authenticateDevice);
+  app.decorate('authenticateUserOrDevice', authenticateUserOrDevice);
 
   app.register(swagger, {
     openapi: {
