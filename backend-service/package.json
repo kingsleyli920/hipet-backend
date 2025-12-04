@@ -33,7 +33,6 @@
     "readable-stream": "^4.7.0",
     "pg": "^8.16.3",
     "pino": "^9.3.2",
-    "readable-stream": "^4",
     "redis": "^4.6.13",
     "undici": "^6.19.8",
     "zod": "^3.22.4"
