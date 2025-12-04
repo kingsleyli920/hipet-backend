@@ -173,8 +173,8 @@ install_dependencies() {
     bun install
     
     # 生成 Prisma Client
-    print_info "生成 Prisma Client..."
-    bunx prisma generate
+   # print_info "生成 Prisma Client..."
+   # bunx prisma generate
     
     print_success "依赖安装完成"
 }
