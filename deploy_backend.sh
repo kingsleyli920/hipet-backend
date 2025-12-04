@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # HiPet Backend Service Deployment Script
-# 用于在 EC2 上部署 Backend Service
+# 用于在 EC2 / 阿里云 上部署 Backend Service
 
 set -e  # 遇到错误立即退出
 
@@ -109,7 +109,7 @@ kill_port() {
     # 检查端口是否被占用
     if command -v lsof >/dev/null 2>&1; then
         PID=$(lsof -ti :$SERVICE_PORT 2>/dev/null || true)
-        if [ ! -z "$PID" ]; then
+        if [ -n "$PID" ]; then
             print_warning "发现进程 $PID 占用端口 $SERVICE_PORT，正在停止..."
             kill -TERM $PID 2>/dev/null || true
             sleep 2
@@ -126,7 +126,7 @@ kill_port() {
         fi
     elif command -v ss >/dev/null 2>&1; then
         PID=$(ss -tlnp | grep ":$SERVICE_PORT " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
-        if [ ! -z "$PID" ]; then
+        if [ -n "$PID" ]; then
             print_warning "发现进程 $PID 占用端口 $SERVICE_PORT，正在停止..."
             kill -TERM $PID 2>/dev/null || true
             sleep 2
@@ -171,10 +171,14 @@ install_dependencies() {
     # 安装依赖
     print_info "运行 bun install..."
     bun install
+
+    # 确保 mqtt 依赖链中的 readable-stream 存在
+    print_info "确保 readable-stream 依赖存在..."
+    bun add readable-stream@^4 || true
     
-    # 生成 Prisma Client
-   # print_info "生成 Prisma Client..."
-   # bunx prisma generate
+    # 生成 Prisma Client（如需的话可以打开）
+    # print_info "生成 Prisma Client..."
+    # bunx prisma generate
     
     print_success "依赖安装完成"
 }
@@ -198,7 +202,7 @@ start_mqtt_broker() {
         MQTT_PID=$(ss -tlnp | grep ":$MQTT_PORT " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
     fi
 
-    if [ ! -z "$MQTT_PID" ]; then
+    if [ -n "$MQTT_PID" ]; then
         print_info "检测到已有进程 ($MQTT_PID) 正在监听 MQTT 端口 $MQTT_PORT，认为 Broker 已经运行，跳过启动。"
         return
     fi
@@ -215,7 +219,7 @@ start_mqtt_broker() {
 
     tmux send-keys -t "${TMUX_SESSION}:${WINDOW_NAME}" "mosquitto -p $MQTT_PORT -v" C-m
     print_success "MQTT Broker 启动命令已发送到 tmux（window: $WINDOW_NAME, 端口: $MQTT_PORT）"
-    print_info "如需查看 Broker 日志: tmux attach -t $TMUX_SESSION -c $MQTT_WINDOW"
+    print_info "如需查看 Broker 日志: tmux attach -t $TMUX_SESSION -t $MQTT_WINDOW"
 }
 
 # 启动服务
