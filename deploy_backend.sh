@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置
-PROJECT_DIR="$HOME/hipet-backend"
+PROJECT_DIR="$HOME/workspace/hipet-backend"
 SERVICE_DIR="$PROJECT_DIR/backend-service"
 TMUX_SESSION="hipet"
 TMUX_WINDOW="backend"
