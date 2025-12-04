@@ -20,6 +20,7 @@ import devicesRoutes from './routes/devices.js';
 import analysisRoutes from './routes/analysis.js';
 import { authenticate, authenticateDevice, authenticateUserOrDevice } from './middleware/auth.js';
 import registerErrorHandler from './middleware/errorHandler.js';
+import { initMqttHandlers } from './services/mqttHandlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,6 +110,9 @@ export function buildApp(): FastifyInstance {
       docs: '/docs'
     }
   }));
+
+  // Initialize MQTT handlers (device data and status via MQTT)
+  initMqttHandlers(app);
 
   return app;
 }

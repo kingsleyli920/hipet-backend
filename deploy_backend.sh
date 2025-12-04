@@ -19,6 +19,10 @@ TMUX_SESSION="hipet"
 TMUX_WINDOW="backend"
 SERVICE_PORT=8000
 
+# MQTT 配置（用于设备通信）
+MQTT_PORT=1883
+MQTT_WINDOW="mqtt"
+
 # 打印函数
 print_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -175,6 +179,45 @@ install_dependencies() {
     print_success "依赖安装完成"
 }
 
+# 启动 / 检查 MQTT Broker（mosquitto）
+start_mqtt_broker() {
+    print_info "检查 / 启动 MQTT Broker (mosquitto)..."
+
+    # 检查 mosquitto 是否安装
+    if ! command -v mosquitto >/dev/null 2>&1; then
+        print_warning "mosquitto 未安装，跳过 MQTT Broker 启动（请先在服务器上安装 mosquitto）"
+        print_warning "例如: sudo yum install -y mosquitto 或 sudo apt-get install -y mosquitto"
+        return
+    fi
+
+    # 检查 MQTT 端口是否已被占用（说明已经有 broker 在跑）
+    local MQTT_PID=""
+    if command -v lsof >/dev/null 2>&1; then
+        MQTT_PID=$(lsof -ti :$MQTT_PORT 2>/dev/null || true)
+    elif command -v ss >/dev/null 2>&1; then
+        MQTT_PID=$(ss -tlnp | grep ":$MQTT_PORT " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+    fi
+
+    if [ ! -z "$MQTT_PID" ]; then
+        print_info "检测到已有进程 ($MQTT_PID) 正在监听 MQTT 端口 $MQTT_PORT，认为 Broker 已经运行，跳过启动。"
+        return
+    fi
+
+    # 在 tmux 中启动一个单独的 MQTT window，运行 mosquitto
+    local WINDOW_NAME="$MQTT_WINDOW"
+    if tmux list-windows -t "$TMUX_SESSION" -F "#{window_name}" | grep -q "^${WINDOW_NAME}$"; then
+        print_info "复用已存在的 Tmux window '$WINDOW_NAME' 启动 MQTT Broker"
+        tmux send-keys -t "${TMUX_SESSION}:${WINDOW_NAME}" C-c C-l || true
+    else
+        print_info "创建新的 Tmux window 用于 MQTT: $WINDOW_NAME"
+        tmux new-window -t "$TMUX_SESSION" -n "$WINDOW_NAME" -c "$SERVICE_DIR"
+    fi
+
+    tmux send-keys -t "${TMUX_SESSION}:${WINDOW_NAME}" "mosquitto -p $MQTT_PORT -v" C-m
+    print_success "MQTT Broker 启动命令已发送到 tmux（window: $WINDOW_NAME, 端口: $MQTT_PORT）"
+    print_info "如需查看 Broker 日志: tmux attach -t $TMUX_SESSION -c $MQTT_WINDOW"
+}
+
 # 启动服务
 start_service() {
     print_info "启动 Backend Service..."
@@ -203,6 +246,7 @@ main() {
     pull_code
     kill_port
     install_dependencies
+    start_mqtt_broker
     start_service
     
     echo ""

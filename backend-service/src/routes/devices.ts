@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { updateDeviceStatus } from '../services/deviceStatusService';
+import { publishCommand } from '../services/mqttClient';
 import crypto from 'crypto';
 
 const prisma = new PrismaClient();
@@ -29,17 +31,6 @@ const bindDeviceSchema = z.object({
 const unbindDeviceSchema = z.object({
   petId: z.string().min(1),
   reason: z.string().optional()
-});
-
-const updateDeviceStatusSchema = z.object({
-  batteryLevel: z.number().int().min(0).max(100).optional(),
-  signalStrength: z.number().int().min(0).max(100).optional(),
-  location: z.object({
-    lat: z.number(),
-    lng: z.number(),
-    accuracy: z.number().optional()
-  }).optional(),
-  metadata: z.record(z.string(), z.any()).optional()
 });
 
 const createDeviceSchema = z.object({
@@ -408,6 +399,21 @@ export default async function devicesRoutes(fastify, options) {
         }
       });
 
+      // Notify device via MQTT (BIND command)
+      try {
+        publishCommand(device.deviceId, {
+          action: 'BIND',
+          userId,
+          petId: data.petId,
+          bindingType: data.bindingType || 'owner',
+          permissions: binding.permissions,
+          settings: binding.settings,
+          ts: Date.now()
+        });
+      } catch (err: any) {
+        console.error('MQTT BIND publish error:', err?.message);
+      }
+
       return reply.status(201).send({
         message: 'Device bound successfully',
         binding,
@@ -558,66 +564,7 @@ export default async function devicesRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const { deviceId } = request.params;
-      const data = updateDeviceStatusSchema.parse(request.body);
-
-      const device = await prisma.device.findUnique({
-        where: { id: deviceId }
-      });
-
-      if (!device) {
-        return reply.status(404).send({
-          error: 'Device not found',
-          message: 'Device not found'
-        });
-      }
-
-      // Update device
-      const updateData: any = {
-        lastOnlineAt: new Date(),
-        lastSyncAt: new Date()
-      };
-
-      if (data.batteryLevel !== undefined) {
-        updateData.batteryLevel = data.batteryLevel;
-        
-        // Create event for low battery
-        if (data.batteryLevel < 20 && device.batteryLevel >= 20) {
-          await prisma.deviceEvent.create({
-            data: {
-              deviceId,
-              eventType: 'battery_low',
-              severity: data.batteryLevel < 10 ? 'critical' : 'warning',
-              message: `Battery level is ${data.batteryLevel}%`,
-              data: { level: data.batteryLevel }
-            }
-          });
-        }
-      }
-
-      if (data.signalStrength !== undefined) {
-        updateData.signalStrength = data.signalStrength;
-      }
-
-      if (data.metadata) {
-        updateData.metadata = data.metadata;
-      }
-
-      const updatedDevice = await prisma.device.update({
-        where: { id: deviceId },
-        data: updateData
-      });
-
-      // Handle location update
-      if (data.location) {
-        await prisma.deviceEvent.create({
-          data: {
-            deviceId,
-            eventType: 'location_update',
-            severity: 'info',
-            data: data.location
-          }
-        });
-      }
+      const updatedDevice = await updateDeviceStatus(deviceId, request.body);
 
       return reply.send({
         message: 'Device status updated',
@@ -626,9 +573,19 @@ export default async function devicesRoutes(fastify, options) {
 
     } catch (error) {
       console.error('Update device status error:', error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-        message: 'Failed to update device status'
+
+      if (error instanceof z.ZodError) {
+        return reply.status(400).send({
+          error: 'Validation error',
+          message: 'Invalid status payload',
+          details: error.errors
+        });
+      }
+
+      const status = (error as any)?.statusCode || 500;
+      return reply.status(status).send({
+        error: (error as any)?.code || 'Internal server error',
+        message: (error as any)?.message || 'Failed to update device status'
       });
     }
   });

@@ -46,3 +46,4 @@ echo "完成后，运行以下命令克隆仓库："
 echo "  git clone git@github-deploy:kingsleyli920/hipet-backend.git"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+

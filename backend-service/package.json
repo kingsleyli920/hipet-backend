@@ -17,7 +17,8 @@
     "test:comprehensive": "node scripts/test_comprehensive.js",
     "test:oauth": "node scripts/test_oauth.js",
     "test:e2e": "node scripts/test_e2e_analysis.mjs",
-    "test:agentic": "node scripts/test_agentic_pet_status.mjs"
+    "test:agentic": "node scripts/test_agentic_pet_status.mjs",
+    "test:mqtt-device": "node scripts/test_mqtt_device_flow.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -28,6 +29,7 @@
     "bcrypt": "^5.1.1",
     "fastify": "^4.28.1",
     "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.14.1",
     "pg": "^8.16.3",
     "pino": "^9.3.2",
     "redis": "^4.6.13",
